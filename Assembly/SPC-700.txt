@@ -273,38 +273,40 @@ HandleNote:
 06ff: c5 f3 00  mov   $00f3,a            ;/
 0702: 6f        ret
 
-0703: 8b 24     dec   $24
+; LFSR algorithm
+0703: 8b 24     dec   $24           ;change between four groups of seven brr blocks
 0705: e4 24     mov   a,$24
-0707: 28 03     and   a,#$03
-0709: 8d 3f     mov   y,#$3f
-070b: cf        mul   ya
-070c: fd        mov   y,a
-070d: 8f 07 12  mov   $12,#$07
-0710: fc        inc   y
-0711: cd 04     mov   x,#$04
+0707: 28 03     and   a,#$03        
+0709: 8d 3f     mov   y,#$3f        ; length of 7 brr blocks
+070b: cf        mul   ya            ; YA= 63 * (  ( tick ) & 3  )
+070c: fd        mov   y,a           ; Y =brr offset ,posible values : 0,63 ,126,189.
+070d: 8f 07 12  mov   $12,#$07      ;repeat 7 times (write 7 brr blocks)
+0710: fc        inc   y             ;skip the brr block header byte
+; Write one brr block:
+0711: cd 04     mov   x,#$04        ;repeat 4 times.
 0713: aa 19 c0  mov1  c,$1803,1
-0716: 8a 19 a0  eor1  c,$1403,1
+0716: 8a 19 a0  eor1  c,$1403,1     ; carry = bit 6 xor bit 5 of Byte2
 0719: 2b 18     rol   $18
 071b: 2b 19     rol   $19
 071d: e4 19     mov   a,$19
 071f: 28 ff     and   a,#$ff
 0721: 08 11     or    a,#$11
-0723: d6 00 fe  mov   $fe00+y,a
+0723: d6 00 fe  mov   $fe00+y,a     ; BRR[y] <- ( ( tone AND Byte2<<1 ) OR 11h )
 0726: fc        inc   y
 0727: e4 18     mov   a,$18
 0729: 08 11     or    a,#$11
-072b: d6 00 fe  mov   $fe00+y,a
+072b: d6 00 fe  mov   $fe00+y,a     ; BRR[y+1] <- Byte1 OR 11h
 072e: fc        inc   y
 072f: 1d        dec   x
 0730: d0 e1     bne   $0713
 0732: 6e 12 db  dbnz  $12,$0710
 0735: 6f        ret
 
-;Unknown routine? The thing is it does seems to be unused
+;Initialize LFSR BRR Buffer (wind noise generator) @fe00
 0736: 8d 00     mov   y,#$00            ;\
 0738: cd 1b     mov   x,#$1b            ; |
 073a: e8 96     mov   a,#$96            ; |
-073c: d6 00 fe  mov   $fe00+y,a         ; |Each 9 bytes put a $96 27 times
+073c: d6 00 fe  mov   $fe00+y,a         ; |Paste BRR Header Blocks
 073f: fc        inc   y                 ; |
 0740: fc        inc   y                 ; |
 0741: fc        inc   y                 ; |
@@ -313,13 +315,13 @@ HandleNote:
 0744: fc        inc   y                 ; |
 0745: fc        inc   y                 ; |
 0746: fc        inc   y                 ; |
-0747: fc        inc   y                 ; |loop
+0747: fc        inc   y                 ; |
 0748: 1d        dec   x                 ; |
 0749: d0 f1     bne   $073c             ;/
-074b: bc        inc   a                 ;\Put a $97 after 9 more bytes
+074b: bc        inc   a                 ;\Paste Last BRR Header (End flag on)
 074c: d6 00 fe  mov   $fe00+y,a         ;/
 074f: 8d fe     mov   y,#$fe            ;\
-0751: e8 00     mov   a,#$00            ; |write $FE00 at $3C80 and $3C82
+0751: e8 00     mov   a,#$00            ; |point
 0753: c5 80 3c  mov   $3c80,a           ; |Probably pointers to above $96s?
 0756: cc 81 3c  mov   $3c81,y           ; |
 0759: c5 82 3c  mov   $3c82,a           ; |
